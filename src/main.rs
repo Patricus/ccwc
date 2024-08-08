@@ -1,5 +1,10 @@
 use clap::Parser;
-use std::fs;
+use std::{
+    ffi::OsStr,
+    fs::{self},
+    io::{BufRead, BufReader},
+    os::unix::fs::MetadataExt,
+};
 
 #[derive(Parser)]
 struct Cli {
@@ -16,15 +21,42 @@ fn main() {
 
     if std::path::Path::new(&path).exists() == false {
         println!("File not found!");
-        return;
+        std::process::exit(1);
     }
 
-    // let file = fs::File::open(&path);
-    let file_name = &path.file_name().take();
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
+        Err(_err) => {
+            println!("Filed to open file!");
+            std::process::exit(1);
+        }
+    };
+
+    let file_name = &path
+        .file_name()
+        .take()
+        .unwrap_or_else(|| &OsStr::new("Failed to read file name!"));
 
     match flags.as_str() {
-        "-c" => println!("{:?} {:?}", fs::metadata(&path).unwrap().len(), file_name),
-        "-l" => println!("{:?} {:?}", fs::metadata(&path).unwrap().len(), file_name),
+        "-c" => {
+            let metadata = match fs::metadata(&path) {
+                Ok(mdata) => mdata,
+                Err(err) => {
+                    println!("{}", err);
+                    std::process::exit(1);
+                }
+            };
+
+            println!("{:?} {:?}", metadata.size(), file_name)
+        }
+        "-l" => {
+            let mut lines: usize = 0;
+
+            for _line in BufReader::new(file).lines() {
+                lines += 1;
+            }
+            println!("{:?} {:?}", lines, file_name)
+        }
         _ => println!("default"),
     }
 }
