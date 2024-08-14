@@ -75,6 +75,20 @@ fn main() {
 
             println!("{:?} {:?}", word_count, file_name)
         }
+        "-m" => {
+            let mut char_count: usize = 0;
+
+            for line in BufReader::new(file).lines() {
+                match line {
+                    Ok(words) => {
+                        char_count += words.len();
+                    }
+                    _ => continue,
+                }
+            }
+
+            println!("{:?} {:?}", char_count, file_name)
+        }
         _ => println!("default"),
     }
 }
