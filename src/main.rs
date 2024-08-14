@@ -57,6 +57,24 @@ fn main() {
             }
             println!("{:?} {:?}", lines, file_name)
         }
+        "-w" => {
+            let mut word_count: usize = 0;
+
+            for line in BufReader::new(file).lines() {
+                match line {
+                    Ok(words) => {
+                        if words.len() == 0 {
+                            continue;
+                        }
+                        let words: Vec<&str> = words.trim().split(" ").collect();
+                        word_count += words.len();
+                    }
+                    _ => continue,
+                }
+            }
+
+            println!("{:?} {:?}", word_count, file_name)
+        }
         _ => println!("default"),
     }
 }
