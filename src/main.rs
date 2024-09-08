@@ -1,14 +1,12 @@
-use clap::{Arg, ArgAction, Command};
-use fs;
+// A clone of the wc CLI tool
 
-//#[derive(Parser)]
-//struct Cli {
-//    input: Option<String>,
-//}
+use clap::{Arg, ArgAction, Command};
+use std::io::{BufRead, BufReader};
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+use std::{borrow, fs};
 
 fn main() {
-    // Get input
-    //let Cli { input } = Cli::parse();
     let matches = Command::new("ccwc")
         .version("0.1")
         .about("ccwc: wc clone")
@@ -48,6 +46,7 @@ fn main() {
         )
         .get_matches();
 
+    // get flags
     let bytes = match matches.get_one::<bool>("bytes") {
         Some(bytes) => bytes,
         _ => &false,
@@ -70,114 +69,105 @@ fn main() {
 
     let input = match matches.get_one::<String>("input") {
         Some(input) => input.to_owned(),
+        // if no input, return
         _ => {
             println!("No input!");
             std::process::exit(1);
         }
-    }
-
-    // TODO: open file, if error then use string input, else steam file.
-
-    // Open file
-    let file = match fs::File::open(input) {
-        Ok(file) => file,
-        Err(_err) => {
-            println!("Failed to open file!");
-            std::process::exit(1);
-        }
     };
 
-    let file_name = path
-        .expect("Path should exist")
-        .file_name()
-        .take()
-        .unwrap_or_else(|| &OsStr::new("Failed to read file name!"));
+    let file = fs::File::open(&input);
 
-    match flags.as_str() {
-        "-c" => {
-            let metadata = match fs::metadata(path) {
-                Ok(mdata) => mdata,
-                Err(err) => {
-                    println!("{}", err);
-                    std::process::exit(1);
+    let metadata = match file {
+        Ok(_) => fs::metadata(&input),
+        Err(err) => Err(err),
+    };
+
+    let file_name = Path::new(&input).file_name();
+
+    let mut values = Vec::new();
+
+    if *bytes || !*bytes && *lines && *words && *chars {
+        let size = match metadata {
+            // if we have file metadata use the file size
+            Ok(mdata) => mdata.size(),
+            // if not return the size of the input string
+            _ => input.as_bytes().len() as u64,
+        };
+        values.push(size.to_string());
+    }
+
+    if *lines || !*bytes && *lines && *words && *chars {
+        let mut lines: usize = 0;
+
+        match file {
+            Ok(file) => {
+                for _line in BufReader::new(file).lines() {
+                    lines += 1;
                 }
-            };
-
-            println!("{:?} {:?}", metadata.size(), file_name)
-        }
-        "-l" => {
-            let mut lines: usize = 0;
-
-            for _line in BufReader::new(file).lines() {
-                lines += 1;
             }
-            println!("{:?} {:?}", lines, file_name)
+            Err(_) => {
+                for _line in input.lines() {
+                    lines += 1;
+                }
+            }
         }
-        "-w" => {
-            let mut word_count: usize = 0;
 
-            for line in BufReader::new(file).lines() {
-                match line {
-                    Ok(words) => {
-                        if words.len() == 0 {
-                            continue;
+        values.push(lines.to_string());
+    }
+
+    if *words || !*bytes && *lines && *words && *chars {
+        let mut word_count: usize = 0;
+
+        match file {
+            Ok(file) => {
+                for line in BufReader::new(file).lines() {
+                    match line {
+                        Ok(words) => {
+                            if words.len() == 0 {
+                                continue;
+                            }
+                            let words: Vec<&str> = words.trim().split(" ").collect();
+                            word_count += words.len();
                         }
-                        let words: Vec<&str> = words.trim().split(" ").collect();
+                        _ => continue,
+                    }
+                }
+            }
+            Err(_) => {
+                for line in input.lines() {
+                    if line.len() > 0 {
+                        let words: Vec<&str> = line.trim().split(" ").collect();
                         word_count += words.len();
                     }
-                    _ => continue,
                 }
             }
-
-            println!("{:?} {:?}", word_count, file_name)
         }
-        "-m" => {
-            let mut char_count: usize = 0;
 
-            for line in BufReader::new(file).lines() {
-                match line {
-                    Ok(words) => {
-                        char_count += words.len();
-                    }
-                    _ => continue,
-                }
-            }
+        values.push(word_count.to_string());
+    }
 
-            println!("{:?} {:?}", char_count, file_name)
-        }
-        _ => {
-            let metadata = match fs::metadata(&path) {
-                Ok(mdata) => mdata,
-                Err(err) => {
-                    println!("{}", err);
-                    std::process::exit(1);
-                }
-            };
+    if *chars {
+        let mut char_count: usize = 0;
 
-            let mut lines: usize = 0;
-            let mut word_count: usize = 0;
-
-            for line in BufReader::new(file).lines() {
-                lines += 1;
-                match line {
-                    Ok(words) => {
-                        if words.len() == 0 {
-                            continue;
+        match file {
+            Ok(file) => {
+                for line in BufReader::new(file).lines() {
+                    match line {
+                        Ok(words) => {
+                            char_count += words.len();
                         }
-                        let words: Vec<&str> = words.trim().split(" ").collect();
-                        word_count += words.len();
+                        _ => continue,
                     }
-                    _ => continue,
                 }
             }
-
-            println!(
-                "{:?} {:?} {:?} {:?}",
-                metadata.size(),
-                lines,
-                word_count,
-                file_name
-            );
+            Err(_) => {
+                for line in input.lines() {
+                    char_count += line.len();
+                }
+            }
         }
+
+        values.push(char_count.to_string());
     }
 }
