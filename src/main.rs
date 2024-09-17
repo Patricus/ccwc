@@ -1,10 +1,10 @@
 // A clone of the wc CLI tool
 
 use clap::{Arg, ArgAction, Command};
+use std::fs;
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use std::{borrow, fs};
 
 fn main() {
     let matches = Command::new("ccwc")
@@ -80,14 +80,15 @@ fn main() {
 
     let metadata = match file {
         Ok(_) => fs::metadata(&input),
-        Err(err) => Err(err),
+        Err(ref err) => Err(std::io::Error::new(err.kind(), err.to_string())),
     };
 
     let file_name = Path::new(&input).file_name();
 
     let mut values = Vec::new();
 
-    if *bytes || !*bytes && *lines && *words && *chars {
+    // If bytes flag or no flags
+    if *bytes || !*bytes && !*lines && !*words && !*chars {
         let size = match metadata {
             // if we have file metadata use the file size
             Ok(mdata) => mdata.size(),
@@ -97,10 +98,11 @@ fn main() {
         values.push(size.to_string());
     }
 
-    if *lines || !*bytes && *lines && *words && *chars {
+    // If lines flag or no flags
+    if *lines || !*bytes && !*lines && !*words && !*chars {
         let mut lines: usize = 0;
 
-        match file {
+        match &file {
             Ok(file) => {
                 for _line in BufReader::new(file).lines() {
                     lines += 1;
@@ -116,10 +118,11 @@ fn main() {
         values.push(lines.to_string());
     }
 
-    if *words || !*bytes && *lines && *words && *chars {
+    // If words flag or no flags
+    if *words || !*bytes && !*lines && !*words && !*chars {
         let mut word_count: usize = 0;
 
-        match file {
+        match &file {
             Ok(file) => {
                 for line in BufReader::new(file).lines() {
                     match line {
@@ -147,6 +150,7 @@ fn main() {
         values.push(word_count.to_string());
     }
 
+    // If chars flag
     if *chars {
         let mut char_count: usize = 0;
 
@@ -170,4 +174,18 @@ fn main() {
 
         values.push(char_count.to_string());
     }
+
+    let mut return_str = values.join(" ").to_owned();
+
+    // TODO: fix logic to determine weather the input is a file
+
+    // If there is a file append the return_str
+    if let Some(file_name) = file_name {
+        if let Some(file_str) = file_name.to_str() {
+            return_str.push_str(" ");
+            return_str.push_str(file_str);
+        }
+    }
+
+    println!("{}", return_str);
 }
