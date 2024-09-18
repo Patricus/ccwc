@@ -83,8 +83,6 @@ fn main() {
         Err(ref err) => Err(std::io::Error::new(err.kind(), err.to_string())),
     };
 
-    let file_name = Path::new(&input).file_name();
-
     let mut values = Vec::new();
 
     // If bytes flag or no flags
@@ -154,7 +152,7 @@ fn main() {
     if *chars {
         let mut char_count: usize = 0;
 
-        match file {
+        match &file {
             Ok(file) => {
                 for line in BufReader::new(file).lines() {
                     match line {
@@ -177,14 +175,27 @@ fn main() {
 
     let mut return_str = values.join(" ").to_owned();
 
-    // TODO: fix logic to determine weather the input is a file
-
-    // If there is a file append the return_str
-    if let Some(file_name) = file_name {
-        if let Some(file_str) = file_name.to_str() {
-            return_str.push_str(" ");
-            return_str.push_str(file_str);
+    // If there is a file append the file name to the return_str
+    match &file {
+        Ok(file) => {
+            // get file metadata
+            let test = file.metadata();
+            if let Ok(test_file) = test {
+                // check metadata if it is a file
+                if test_file.is_file() {
+                    // get file name
+                    let file_name = Path::new(&input).file_name();
+                    if let Some(file_name) = file_name {
+                        if let Some(file_str) = file_name.to_str() {
+                            // append space and file name
+                            return_str.push_str(" ");
+                            return_str.push_str(file_str);
+                        }
+                    }
+                }
+            }
         }
+        Err(_) => {}
     }
 
     println!("{}", return_str);
